@@ -1,0 +1,10 @@
+netflix_lakehouse:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('DUCKDB_PATH', 'data/netflix_lakehouse.duckdb') }}"
+      threads: 4
+      extensions:
+        - httpfs
+        - parquet

@@ -1,0 +1,122 @@
+version: 2
+
+models:
+  - name: dim_content
+    description: "SCD Type 1 content dimension (movie attributes)."
+    columns:
+      - name: content_sk
+        description: "Surrogate key (MD5 of movie_id)."
+        tests:
+          - not_null
+          - unique
+      - name: movie_id
+        description: "Natural key from MovieLens."
+        tests:
+          - not_null
+          - unique
+      - name: release_year
+        description: "Year from title text."
+        tests:
+          - not_null
+      - name: era
+        description: "classic | modern | contemporary | recent."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [classic, modern, contemporary, recent]
+      - name: primary_genre
+        description: "First genre in pipe-delimited list."
+        tests:
+          - not_null
+
+  - name: dim_user
+    description: "SCD Type 2 user dimension. Membership tier history."
+    columns:
+      - name: user_sk
+        description: "Surrogate key (MD5 of user_id + dbt_scd_id)."
+        tests:
+          - not_null
+          - unique
+      - name: user_id
+        description: "Natural key."
+        tests:
+          - not_null
+      - name: membership_tier
+        tests:
+          - accepted_values:
+              arguments:
+                values: [basic, standard, premium]
+      - name: region
+        tests:
+          - accepted_values:
+              arguments:
+                values: [NA, EU, APAC, LATAM]
+      - name: is_current
+        tests:
+          - not_null
+
+  - name: dim_date
+    description: "Calendar dimension 2015-01-01 to 2025-12-31."
+    columns:
+      - name: date_sk
+        tests:
+          - not_null
+          - unique
+      - name: full_date
+        tests:
+          - not_null
+          - unique
+      - name: quarter
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4]
+                quote: false
+
+  - name: fact_viewership
+    description: "Grain: one row per (user, movie, rating event). Point-in-time joined to dim_user."
+    columns:
+      - name: rating_sk
+        tests:
+          - not_null
+          - unique
+      - name: user_sk
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_user')
+                field: user_sk
+      - name: content_sk
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_content')
+                field: content_sk
+      - name: date_sk
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_sk
+      - name: rating_value
+        tests:
+          - not_null
+
+  - name: mart_content_performance
+    description: "One row per content_sk with Bayesian-weighted score."
+    columns:
+      - name: content_sk
+        tests:
+          - not_null
+          - unique
+      - name: total_ratings
+        tests:
+          - not_null
+      - name: avg_rating
+        tests:
+          - not_null

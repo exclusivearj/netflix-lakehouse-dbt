@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+build/
+
+# Virtual environments
+.venv/
+venv/
+
+# Testing
+.pytest_cache/
+.coverage
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+
+# dbt
+target/
+dbt_packages/
+logs/
+.dbt/
+
+# DuckDB
+data/*.duckdb
+data/*.duckdb.wal
+data/ml-25m.zip
+data/ml-25m/
+
+# Airflow
+.astro/
+airflow.cfg
+airflow.db
+airflow/data/
+
+# Secrets
+.env

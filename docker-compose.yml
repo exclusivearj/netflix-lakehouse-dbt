@@ -1,0 +1,104 @@
+version: "3.9"
+
+x-airflow-env: &airflow-env
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+  AIRFLOW__CORE__FERNET_KEY: ""
+  AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+  AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+  AIRFLOW__WEBSERVER__SECRET_KEY: "p2_secret_change_in_prod"
+  AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
+  AIRFLOW_CONN_DUCKDB_DEFAULT: 'generic://:@?extra=%7B%22database%22%3A%22%2Fusr%2Flocal%2Fairflow%2Fdata%2Fnetflix_lakehouse.duckdb%22%7D'
+  AIRFLOW_CONN_MOVIELENS_HTTP: 'http://files.grouplens.org'
+  AIRFLOW_CONN_SLACK_WEBHOOK: 'http://:DUMMY@hooks.slack.com/services/PLACEHOLDER'
+  DUCKDB_PATH: /usr/local/airflow/data/netflix_lakehouse.duckdb
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      interval: 10s
+      retries: 5
+
+  airflow-init:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    image: p2-airflow:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *airflow-env
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db migrate &&
+        airflow users create -u admin -p admin -f Admin -l Admin -r Admin -e admin@example.com || true
+    volumes:
+      - ./airflow/dags:/usr/local/airflow/dags
+      - ./airflow/plugins:/usr/local/airflow/plugins
+      - ./airflow/include:/usr/local/airflow/include
+      - ./airflow/tests:/usr/local/airflow/tests
+      - .:/usr/local/airflow/dbt
+      - ./data:/usr/local/airflow/data
+
+  webserver:
+    image: p2-airflow:latest
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *airflow-env
+    command: api-server
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./airflow/dags:/usr/local/airflow/dags
+      - ./airflow/plugins:/usr/local/airflow/plugins
+      - ./airflow/include:/usr/local/airflow/include
+      - ./airflow/tests:/usr/local/airflow/tests
+      - .:/usr/local/airflow/dbt
+      - ./data:/usr/local/airflow/data
+
+  scheduler:
+    image: p2-airflow:latest
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *airflow-env
+    command: scheduler
+    volumes:
+      - ./airflow/dags:/usr/local/airflow/dags
+      - ./airflow/plugins:/usr/local/airflow/plugins
+      - ./airflow/include:/usr/local/airflow/include
+      - ./airflow/tests:/usr/local/airflow/tests
+      - .:/usr/local/airflow/dbt
+      - ./data:/usr/local/airflow/data
+
+  triggerer:
+    image: p2-airflow:latest
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *airflow-env
+    command: triggerer
+    volumes:
+      - ./airflow/dags:/usr/local/airflow/dags
+      - ./airflow/plugins:/usr/local/airflow/plugins
+      - ./airflow/include:/usr/local/airflow/include
+      - .:/usr/local/airflow/dbt
+      - ./data:/usr/local/airflow/data
+
+volumes:
+  postgres-data:

@@ -1,0 +1,47 @@
+name: netflix_lakehouse
+version: '1.0.0'
+config-version: 2
+profile: netflix_lakehouse
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+snapshot-paths: ["snapshots"]
+analysis-paths: ["analyses"]
+macro-paths: ["macros"]
+
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+seeds:
+  netflix_lakehouse:
+    +schema: seeds
+    +quote_columns: false
+    users:
+      +column_types:
+        user_id: integer
+        membership_tier: varchar
+        region: varchar
+        device_preference: varchar
+        created_at: date
+
+models:
+  netflix_lakehouse:
+    bronze:
+      +materialized: view
+      +schema: bronze
+    silver:
+      +materialized: view
+      +schema: silver
+    gold:
+      +materialized: table
+      +schema: gold
+
+snapshots:
+  netflix_lakehouse:
+    +target_schema: gold
+    +strategy: check
+    +check_cols: [membership_tier, region, device_preference]
+
+vars:
+  current_year: 2026

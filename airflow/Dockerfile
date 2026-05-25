@@ -1,0 +1,8 @@
+FROM quay.io/astronomer/astro-runtime:10.5.0
+
+USER root
+COPY --chown=astro:astro requirements.txt /requirements.txt
+COPY --chown=astro:astro pipeline_sentinel-0.1.0-py3-none-any.whl /tmp/
+RUN pip install --no-cache-dir -r /requirements.txt /tmp/pipeline_sentinel-0.1.0-py3-none-any.whl
+
+USER astro
