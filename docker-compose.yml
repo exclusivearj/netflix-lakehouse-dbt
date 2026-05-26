@@ -6,7 +6,9 @@ x-airflow-env: &airflow-env
   AIRFLOW__CORE__FERNET_KEY: ""
   AIRFLOW__CORE__LOAD_EXAMPLES: "false"
   AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
-  AIRFLOW__WEBSERVER__SECRET_KEY: "p2_secret_change_in_prod"
+  AIRFLOW__API__SECRET_KEY: "AIieU8Dr6YBKz4yedsgxpRozSA97wP5srmF29nBgvaA="
+  AIRFLOW__API_AUTH__JWT_SECRET: "lkh1XN6S+yJrVjNJdvy3jxtwuAgByZBQX0jlj1sjv3A="
+  AIRFLOW__CORE__EXECUTION_API_SERVER_URL: "http://webserver:8080/execution/"
   AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
   AIRFLOW_CONN_DUCKDB_DEFAULT: 'generic://:@?extra=%7B%22database%22%3A%22%2Fusr%2Flocal%2Fairflow%2Fdata%2Fnetflix_lakehouse.duckdb%22%7D'
   AIRFLOW_CONN_MOVIELENS_HTTP: 'http://files.grouplens.org'
