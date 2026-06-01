@@ -44,7 +44,7 @@ DBT_BASH = (
     max_active_runs=1,
     default_args={"retries": 1, "retry_delay": timedelta(minutes=5)},
     tags=["project2", "dbt", "lakehouse"],
-    description="Full daily run of the Netflix lakehouse: seed → snapshot → Bronze → Silver → Gold → sentinel quality checks.",
+    description="Full daily run of the Netflix lakehouse: seed → snapshot → Bronze → Silver → Gold → observe quality checks.",
     on_failure_callback=notify_failure,
 )
 def lakehouse_daily_pipeline():
@@ -96,7 +96,7 @@ def lakehouse_daily_pipeline():
     )
 
     @task
-    def run_sentinel_quality_checks() -> dict:
+    def run_observe_quality_checks() -> dict:
         hook = DuckDBHook()
         if not hook.table_exists("gold", "mart_content_performance"):
             raise AirflowSkipException("mart_content_performance not built; skipping checks.")
@@ -116,11 +116,11 @@ def lakehouse_daily_pipeline():
             )
             if r.status.value == "fail":
                 any_fail = True
-        log.info("Sentinel results: %s", results)
+        log.info("Observe results: %s", results)
         return {"status": "fail" if any_fail else "pass", "results": results, "rows": len(df)}
 
     @task(trigger_rule=TriggerRule.ALL_DONE)
-    def store_run_metadata(seed_counts: dict, sentinel_result: dict) -> None:
+    def store_run_metadata(seed_counts: dict, observe_result: dict) -> None:
         hook = DuckDBHook()
         conn = hook.get_conn()
         try:
@@ -136,7 +136,7 @@ def lakehouse_daily_pipeline():
                     seed_tags_rows INT,
                     seed_users_rows INT,
                     gold_mart_rows INT,
-                    sentinel_status VARCHAR
+                    observe_status VARCHAR
                 );
                 """
             )
@@ -145,25 +145,25 @@ def lakehouse_daily_pipeline():
                 [
                     "{{ run_id }}",
                     datetime.utcnow(),
-                    sentinel_result.get("status", "unknown"),
+                    observe_result.get("status", "unknown"),
                     seed_counts.get("ratings", 0),
                     seed_counts.get("movies", 0),
                     seed_counts.get("tags", 0),
                     seed_counts.get("users", 0),
-                    sentinel_result.get("rows", 0),
-                    sentinel_result.get("status", "unknown"),
+                    observe_result.get("rows", 0),
+                    observe_result.get("status", "unknown"),
                 ],
             )
         finally:
             conn.close()
 
     freshness = check_source_data_freshness()
-    sentinel_result = run_sentinel_quality_checks()
-    metadata = store_run_metadata(freshness, sentinel_result)
+    observe_result = run_observe_quality_checks()
+    metadata = store_run_metadata(freshness, observe_result)
 
     freshness >> dbt_seed_task >> bronze_task_group >> silver_task_group
-    silver_task_group >> dim_user_snapshot_task >> gold_task_group >> sentinel_result
-    sentinel_result >> metadata
+    silver_task_group >> dim_user_snapshot_task >> gold_task_group >> observe_result
+    observe_result >> metadata
 
 
 dag = lakehouse_daily_pipeline()

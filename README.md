@@ -12,7 +12,7 @@ This is **Project 2** in the Netflix L5 portfolio. Modeling rationale lives in [
 | Transform | dbt-core + dbt-duckdb |
 | Source | MovieLens 25M (25M ratings, 62K movies) + synthetic users.csv |
 | Orchestration | Astronomer Airflow 2.9 + astronomer-cosmos (DbtTaskGroup) |
-| Data quality | [`pipeline-sentinel`](vendor/) — vendored wheel |
+| Data quality | [`pipeline-observe`](vendor/) — vendored wheel |
 
 ## Architecture
 
@@ -51,6 +51,8 @@ Equivalent to:
 
 Then `make docs` to open the docs site.
 
+Every Python target (`make setup`, `make build`, `make test`, `make docs`, `make snapshot`) auto-creates a Python 3.11 virtualenv at `.venv/` on first use via a observe file at `.venv/.deps-installed`. Subsequent calls are cached. Run `rm -rf .venv` to force a full rebuild — useful if the venv was left in a stale state. Override the interpreter with `PYTHON=python3.x make ...` if 3.11 is unavailable.
+
 ## Airflow + Cosmos
 
 ```bash
@@ -61,7 +63,7 @@ Brings up postgres + airflow-init + webserver + scheduler + triggerer. UI: <http
 
 | DAG | Schedule | Purpose |
 |---|---|---|
-| `lakehouse_daily_pipeline` | `0 2 * * *` | seed → snapshot → Bronze (Cosmos DbtTaskGroup) → Silver → Gold → `pipeline-sentinel` quality checks on `mart_content_performance` |
+| `lakehouse_daily_pipeline` | `0 2 * * *` | seed → snapshot → Bronze (Cosmos DbtTaskGroup) → Silver → Gold → `pipeline-observe` quality checks on `mart_content_performance` |
 | `movielens_data_refresh` | `0 1 1 * *` | monthly source refresh; triggers `lakehouse_daily_pipeline` on success |
 | `dbt_docs_publish` | manual / on-success | `dbt docs generate` → copy to `/www/dbt_docs` → Slack notification |
 
@@ -93,15 +95,15 @@ netflix-lakehouse-dbt/
 ├── docker-compose.yml             ← Airflow + Postgres + DuckDB volume
 ├── Makefile                       ← setup, build, test, docs, airflow-up, ...
 ├── airflow/                       ← Astronomer scaffold + 3 DAGs + Cosmos config + DuckDBHook
-└── vendor/pipeline_sentinel-0.1.0-py3-none-any.whl
+└── vendor/pipeline_observe-0.1.0-py3-none-any.whl
 ```
 
-## Sentinel vendoring
+## Observe vendoring
 
-`pipeline-sentinel` is committed under `vendor/` and `airflow/` so the repo is fully standalone. To develop the library and this project together, replace the wheel install with editable mode:
+`pipeline-observe` is committed under `vendor/` and `airflow/` so the repo is fully standalone. To develop the library and this project together, replace the wheel install with editable mode:
 
 ```bash
-.venv/bin/pip install -e ~/Documents/Developer/pipeline-sentinel
+.venv/bin/pip install -e ~/Documents/Developer/pipeline-observe
 ```
 
 ## Spec sources

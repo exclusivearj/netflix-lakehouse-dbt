@@ -50,6 +50,6 @@ def test_cosmos_task_groups_present(dag_bag):
     )
 
 
-def test_sentinel_task_present(dag_bag):
+def test_observe_task_present(dag_bag):
     dag = dag_bag.get_dag("lakehouse_daily_pipeline")
-    assert any("sentinel" in t.task_id for t in dag.tasks)
+    assert any("observe" in t.task_id for t in dag.tasks)

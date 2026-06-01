@@ -1,8 +1,8 @@
-"""Sentinel check configurations for Project 2 Gold layer tables."""
+"""Observe check configurations for Project 2 Gold layer tables."""
 
 from __future__ import annotations
 
-from sentinel.checks import (
+from observe.checks import (
     DistributionCheck,
     NullRateCheck,
     RangeCheck,
