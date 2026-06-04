@@ -9,7 +9,7 @@
 | Engine | DuckDB (single-node OLAP) |
 | Transform | dbt-core + dbt-duckdb |
 | Source | MovieLens 25M (25M ratings, 62K movies) + synthetic users.csv |
-| Orchestration | Astronomer Airflow 2.9 + astronomer-cosmos (DbtTaskGroup) |
+| Orchestration | Astronomer Airflow 3.1 (Astro Runtime 3.1-5) + astronomer-cosmos (DbtTaskGroup) |
 | Data quality | [`pipeline-observe`](vendor/) — vendored wheel |
 
 ## Problem statement
@@ -66,7 +66,7 @@ Equivalent to:
 
 Then `make docs` to open the docs site.
 
-Every Python target (`make setup`, `make build`, `make test`, `make docs`, `make snapshot`) auto-creates a Python 3.11 virtualenv at `.venv/` on first use via a observe file at `.venv/.deps-installed`. Subsequent calls are cached. Run `rm -rf .venv` to force a full rebuild — useful if the venv was left in a stale state. Override the interpreter with `PYTHON=python3.x make ...` if 3.11 is unavailable.
+Every Python target (`make setup`, `make build`, `make test`, `make docs`, `make snapshot`) auto-creates a Python 3.11 virtualenv at `.venv/` on first use via a marker file at `.venv/.deps-installed`. Subsequent calls are cached. Run `rm -rf .venv` to force a full rebuild — useful if the venv was left in a stale state. Override the interpreter with `PYTHON=python3.x make ...` if 3.11 is unavailable.
 
 ## Airflow + Cosmos
 
@@ -74,11 +74,11 @@ Every Python target (`make setup`, `make build`, `make test`, `make docs`, `make
 docker compose up -d
 ```
 
-Brings up postgres + airflow-init + webserver + scheduler + triggerer. UI: <http://localhost:8080> (admin/admin).
+Brings up postgres + airflow-init + webserver + scheduler + triggerer + dag-processor. UI: <http://localhost:8080> (admin/admin).
 
 | DAG | Schedule | Purpose |
 |---|---|---|
-| `lakehouse_daily_pipeline` | `0 2 * * *` | seed → snapshot → Bronze (Cosmos DbtTaskGroup) → Silver → Gold → `pipeline-observe` quality checks on `mart_content_performance` |
+| `lakehouse_daily_pipeline` | `0 2 * * *` | seed → Bronze (Cosmos DbtTaskGroup) → Silver → snapshot → Gold → `pipeline-observe` quality checks on `mart_content_performance` |
 | `movielens_data_refresh` | `0 1 1 * *` | monthly source refresh; triggers `lakehouse_daily_pipeline` on success |
 | `dbt_docs_publish` | manual / on-success | `dbt docs generate` → copy to `/www/dbt_docs` → Slack notification |
 
@@ -145,15 +145,16 @@ Every model in the Gold layer has a `schema.yml` contract. Representative constr
 dim_content:
   - content_sk: not_null, unique
   - movie_id: not_null, unique
-  - release_year: not_null, between(1888, current_year)
-  - primary_genre: not_null, accepted_values([...])
+  - release_year: not_null
+  - era: not_null, accepted_values([classic, modern, contemporary, recent])
+  - primary_genre: not_null
 
 fact_viewership:
   - rating_sk: not_null, unique
   - user_sk: not_null, relationships(dim_user.user_sk)
   - content_sk: not_null, relationships(dim_content.content_sk)
   - date_sk: not_null, relationships(dim_date.date_sk)
-  - rating_value: not_null, between(0.5, 5.0)
+  - rating_value: not_null   # range [0.5, 5.0] enforced by the assert_rating_range singular test
 ```
 
 Referential integrity between facts and dims is enforced via `relationships` tests. The `assert_no_orphan_facts.sql` singular test is a belt-and-suspenders check.
@@ -212,6 +213,6 @@ netflix-lakehouse-dbt/
 `pipeline-observe` is committed under `vendor/` and `airflow/` so the repo is fully standalone. To develop the library and this project together, replace the wheel install with editable mode:
 
 ```bash
-.venv/bin/pip install -e ~/pipeline-observe
+.venv/bin/pip install -e ../1-pipeline-observe
 ```
 
