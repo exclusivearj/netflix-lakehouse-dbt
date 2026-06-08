@@ -3,7 +3,8 @@ VENV   := .venv
 PIP    := $(VENV)/bin/pip
 DBT    := $(VENV)/bin/dbt
 DBT_FLAGS := --profiles-dir . --project-dir .
-OBSERVE := $(VENV)/.deps-installed
+PIP_DEPS := $(VENV)/.deps-installed
+DBT_DEPS := dbt_packages
 
 .PHONY: help venv setup deps build snapshot test docs all clean \
         airflow-up airflow-down trigger-pipeline trigger-refresh airflow-test
@@ -23,34 +24,41 @@ help:
 	@echo "  make airflow-down     docker compose down -v"
 	@echo "  make trigger-pipeline trigger lakehouse_daily_pipeline"
 
-$(OBSERVE):
+# venv + pip deps + observe wheel
+$(PIP_DEPS): requirements.txt vendor/pipeline_observe-0.1.0-py3-none-any.whl
 	rm -rf $(VENV)
 	$(PYTHON) -m venv $(VENV)
 	$(PIP) install --upgrade pip
 	$(PIP) install -r requirements.txt
 	$(PIP) install vendor/pipeline_observe-0.1.0-py3-none-any.whl
+	touch $(PIP_DEPS)
+
+# dbt packages — re-run when packages.yml changes or dbt_packages/ is removed.
+# order-only dep on the venv: needs dbt to exist, but a venv rebuild must not
+# force a redundant dbt deps.
+$(DBT_DEPS): packages.yml | $(PIP_DEPS)
 	$(DBT) deps $(DBT_FLAGS)
-	touch $(OBSERVE)
+	touch $(DBT_DEPS)
 
-venv: $(OBSERVE)
+venv: $(PIP_DEPS) $(DBT_DEPS)
 
-deps: $(OBSERVE)
+deps: $(PIP_DEPS) $(DBT_DEPS)
 
-setup: $(OBSERVE)
+setup: $(PIP_DEPS) $(DBT_DEPS)
 	$(VENV)/bin/python setup.py
 
-build: $(OBSERVE)
+build: $(PIP_DEPS) $(DBT_DEPS)
 	$(DBT) seed     $(DBT_FLAGS)
 	$(DBT) snapshot $(DBT_FLAGS)
 	$(DBT) run      $(DBT_FLAGS)
 
-snapshot: $(OBSERVE)
+snapshot: $(PIP_DEPS) $(DBT_DEPS)
 	$(DBT) snapshot $(DBT_FLAGS)
 
-test: $(OBSERVE)
+test: $(PIP_DEPS) $(DBT_DEPS)
 	$(DBT) test $(DBT_FLAGS)
 
-docs: $(OBSERVE)
+docs: $(PIP_DEPS) $(DBT_DEPS)
 	$(DBT) docs generate $(DBT_FLAGS)
 	$(DBT) docs serve    $(DBT_FLAGS)
 

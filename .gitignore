@@ -41,3 +41,6 @@ airflow/data/
 
 # Secrets
 .env
+
+# dbt seeds
+seeds/*.csv

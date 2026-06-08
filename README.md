@@ -66,7 +66,9 @@ Equivalent to:
 
 Then `make docs` to open the docs site.
 
-Every Python target (`make setup`, `make build`, `make test`, `make docs`, `make snapshot`) auto-creates a Python 3.11 virtualenv at `.venv/` on first use via a marker file at `.venv/.deps-installed`. Subsequent calls are cached. Run `rm -rf .venv` to force a full rebuild — useful if the venv was left in a stale state. Override the interpreter with `PYTHON=python3.x make ...` if 3.11 is unavailable.
+Every Python target (`make setup`, `make build`, `make test`, `make docs`, `make snapshot`) auto-creates a Python 3.11 virtualenv at `.venv/` on first use via a marker file at `.venv/.deps-installed`. dbt packages are tracked separately by the `dbt_packages/` directory and re-installed whenever it's missing (e.g. after `make clean`) or `packages.yml` changes — so `make clean` re-runs `dbt deps` without rebuilding the whole venv. Subsequent calls are cached. Run `rm -rf .venv` to force a full rebuild — useful if the venv was left in a stale state. Override the interpreter with `PYTHON=python3.x make ...` if 3.11 is unavailable.
+
+> **Troubleshooting:** If a dbt command fails with `found N package(s) … but only 0 package(s) installed in dbt_packages`, just run `make deps` (or `make all`) — the build now re-installs dbt packages automatically whenever `dbt_packages/` is absent.
 
 ## Airflow + Cosmos
 
@@ -213,6 +215,6 @@ netflix-lakehouse-dbt/
 `pipeline-observe` is committed under `vendor/` and `airflow/` so the repo is fully standalone. To develop the library and this project together, replace the wheel install with editable mode:
 
 ```bash
-.venv/bin/pip install -e ../1-pipeline-observe
+.venv/bin/pip install -e https://github.com/exclusivearj/pipeline-observe
 ```
 

@@ -1,6 +1,6 @@
 astronomer-cosmos[dbt-duckdb]>=1.5.0
-dbt-core>=1.7.0
-dbt-duckdb>=1.7.0
+dbt-core>=1.10.0
+dbt-duckdb>=1.10.0
 duckdb>=0.9.0
 apache-airflow-providers-slack>=8.5.0
 apache-airflow-providers-http>=4.10.0
