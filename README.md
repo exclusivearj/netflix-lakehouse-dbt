@@ -1,5 +1,7 @@
 # netflix-lakehouse-dbt
 
+![A complete lakehouse dimensional model using dbt, DuckDB, and Airflow](./assets/banner.png)
+
 > Medallion-architecture dbt project on DuckDB modeling the Netflix viewership domain. Star schema, SCD Type 2 user dimension, dbt data contracts, Bayesian-weighted content score, and Airflow + Cosmos orchestration.
 
 ## Stack
