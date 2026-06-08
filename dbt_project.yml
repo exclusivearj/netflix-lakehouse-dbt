@@ -17,6 +17,13 @@ seeds:
   netflix_lakehouse:
     +schema: seeds
     +quote_columns: false
+    movies:
+      # MovieLens movies.csv has RFC-4180 escaped quotes (e.g. movieId 7789:
+      # "11'09""01 - September 11 (2002)"). DuckDB 1.5.x's fast COPY parser
+      # auto-detects escape=(empty) and rejects them in strict mode, so route
+      # this small (~62k-row) seed through dbt-duckdb's agate loader instead.
+      # ratings/tags stay on the fast COPY path.
+      +fast: false
     users:
       +column_types:
         user_id: integer

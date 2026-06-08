@@ -47,10 +47,15 @@ deps: $(PIP_DEPS) $(DBT_DEPS)
 setup: $(PIP_DEPS) $(DBT_DEPS)
 	$(VENV)/bin/python setup.py
 
+# Order matters: dim_user_snapshot reads stg_users (silver), and gold dim_user
+# reads the snapshot — so the snapshot must run AFTER its staging input exists
+# and BEFORE the gold models that consume it. Build the staging chain, snapshot
+# it, then build everything else.
 build: $(PIP_DEPS) $(DBT_DEPS)
-	$(DBT) seed     $(DBT_FLAGS)
-	$(DBT) snapshot $(DBT_FLAGS)
-	$(DBT) run      $(DBT_FLAGS)
+	$(DBT) seed                     $(DBT_FLAGS)
+	$(DBT) run  --select +stg_users $(DBT_FLAGS)
+	$(DBT) snapshot                 $(DBT_FLAGS)
+	$(DBT) run                      $(DBT_FLAGS)
 
 snapshot: $(PIP_DEPS) $(DBT_DEPS)
 	$(DBT) snapshot $(DBT_FLAGS)
@@ -69,7 +74,15 @@ clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 
 # ── Airflow targets ─────────────────────────────────────────────
+# Build the image before `up`: only airflow-init declares a build context, so on
+# a fresh checkout a bare `docker compose up -d` tries to *pull* p2-airflow:latest
+# for the webserver/scheduler/triggerer/dag-processor (which only reference it)
+# and fails with "pull access denied / not found". Building airflow-init first
+# tags the image locally so every service resolves it. (Mirrors project 2's
+# build-first airflow-up; cached layers make repeat runs fast, and it also picks
+# up requirements.txt changes that a bare `up -d` would silently ignore.)
 airflow-up:
+	docker compose build airflow-init
 	docker compose up -d
 
 airflow-down:

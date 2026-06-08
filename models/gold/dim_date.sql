@@ -9,8 +9,9 @@ SELECT
     CAST(STRFTIME(full_date, '%Y%m%d') AS INT) AS date_sk,
     full_date,
     CAST(STRFTIME(full_date, '%Y') AS INT)     AS year,
-    ((CAST(STRFTIME(full_date, '%m') AS INT) - 1) / 3 + 1) AS quarter,
-    'Q' || (((CAST(STRFTIME(full_date, '%m') AS INT) - 1) / 3 + 1))::VARCHAR AS quarter_name,
+    -- DuckDB '/' is float division (1/3 = 0.33); use '//' for integer quarters 1-4
+    ((CAST(STRFTIME(full_date, '%m') AS INT) - 1) // 3 + 1) AS quarter,
+    'Q' || (((CAST(STRFTIME(full_date, '%m') AS INT) - 1) // 3 + 1))::VARCHAR AS quarter_name,
     CAST(STRFTIME(full_date, '%m') AS INT)     AS month,
     STRFTIME(full_date, '%B')                  AS month_name,
     STRFTIME(full_date, '%b')                  AS month_short,

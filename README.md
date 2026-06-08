@@ -61,22 +61,30 @@ make all
 Equivalent to:
 1. `make setup` — download MovieLens 25M + generate users.csv
 2. `make deps`  — `pip install -r requirements.txt && dbt deps`
-3. `make build` — `dbt seed && dbt snapshot && dbt run`
+3. `make build` — `dbt seed` → `dbt run --select +stg_users` → `dbt snapshot` → `dbt run` (snapshot interleaved between staging and gold — see Troubleshooting)
 4. `make test`  — `dbt test`
 
 Then `make docs` to open the docs site.
 
 Every Python target (`make setup`, `make build`, `make test`, `make docs`, `make snapshot`) auto-creates a Python 3.11 virtualenv at `.venv/` on first use via a marker file at `.venv/.deps-installed`. dbt packages are tracked separately by the `dbt_packages/` directory and re-installed whenever it's missing (e.g. after `make clean`) or `packages.yml` changes — so `make clean` re-runs `dbt deps` without rebuilding the whole venv. Subsequent calls are cached. Run `rm -rf .venv` to force a full rebuild — useful if the venv was left in a stale state. Override the interpreter with `PYTHON=python3.x make ...` if 3.11 is unavailable.
 
-> **Troubleshooting:** If a dbt command fails with `found N package(s) … but only 0 package(s) installed in dbt_packages`, just run `make deps` (or `make all`) — the build now re-installs dbt packages automatically whenever `dbt_packages/` is absent.
+> **Troubleshooting**
+> - `found N package(s) … but only 0 package(s) installed in dbt_packages`: run `make deps` (or `make all`) — the build now re-installs dbt packages automatically whenever `dbt_packages/` is absent.
+> - `make build`/`make all` ordering: `dim_user_snapshot` reads the `stg_users` (silver) view and gold `dim_user` reads the snapshot, so `build` runs `seed → run +stg_users → snapshot → run` (the snapshot is interleaved between staging and gold). Don't reorder it to a plain `seed → snapshot → run`.
+> - `dbt seed` on `movies` uses `+fast: false` (see `dbt_project.yml`): DuckDB 1.5.x's fast `COPY` parser rejects RFC-4180 escaped quotes (e.g. `"11'09""01 …"`), so that one small seed loads via the agate reader; `ratings`/`tags` stay on the fast path.
 
 ## Airflow + Cosmos
 
 ```bash
-docker compose up -d
+make airflow-up
 ```
 
-Brings up postgres + airflow-init + webserver + scheduler + triggerer + dag-processor. UI: <http://localhost:8080> (admin/admin).
+Builds the `p2-airflow` image, then brings up postgres + airflow-init + webserver + scheduler + triggerer + dag-processor. UI: <http://localhost:8080> (admin/admin).
+
+> Use `make airflow-up`, not a bare `docker compose up -d`. Only `airflow-init`
+> declares a build context; on a fresh checkout the other services would try to
+> *pull* `p2-airflow:latest` (which exists only locally) and fail. The make
+> target builds the image first so every service resolves it.
 
 | DAG | Schedule | Purpose |
 |---|---|---|

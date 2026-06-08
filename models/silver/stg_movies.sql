@@ -19,7 +19,7 @@ SELECT
     release_year,
     genres_array,
     genres_array[1]                AS primary_genre,
-    CARDINALITY(genres_array)      AS genre_count,
+    LEN(genres_array)              AS genre_count,  -- DuckDB 1.5.x: CARDINALITY() is MAP-only; LEN() counts list elements
     CASE
         WHEN release_year < 1980 THEN 'classic'
         WHEN release_year < 2000 THEN 'modern'
