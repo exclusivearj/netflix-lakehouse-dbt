@@ -1,9 +1,11 @@
--- Calendar dimension covering 2015-01-01 to 2025-12-31.
+-- Calendar dimension covering 1995-01-01 to 2025-12-31.
+-- Must span the full rated_at range (MovieLens ratings start 1995) or
+-- fact_viewership.date_sk fails its relationship test to dim_date.
 {{ config(materialized='table') }}
 
 WITH spine AS (
     SELECT CAST(generate_series AS DATE) AS full_date
-    FROM generate_series(DATE '2015-01-01', DATE '2025-12-31', INTERVAL '1 day')
+    FROM generate_series(DATE '1995-01-01', DATE '2025-12-31', INTERVAL '1 day')
 )
 SELECT
     CAST(STRFTIME(full_date, '%Y%m%d') AS INT) AS date_sk,

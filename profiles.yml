@@ -5,6 +5,15 @@ netflix_lakehouse:
       type: duckdb
       path: "{{ env_var('DUCKDB_PATH', 'data/netflix_lakehouse.duckdb') }}"
       threads: 4
+      # Bound DuckDB memory so the 25M-row ratings seed doesn't get OOM-killed
+      # (SIGKILL/-9) inside the ~6GB Airflow container. memory_limit defaults high
+      # for the host; the Airflow containers override DUCKDB_MEMORY_LIMIT to a small
+      # value (see docker-compose x-airflow-env). preserve_insertion_order=false is
+      # DuckDB's recommended setting for large imports — cuts peak memory sharply and
+      # lets it spill to disk instead of failing.
+      settings:
+        memory_limit: "{{ env_var('DUCKDB_MEMORY_LIMIT', '12GB') }}"
+        preserve_insertion_order: false
       extensions:
         - httpfs
         - parquet

@@ -17,6 +17,10 @@ seeds:
   netflix_lakehouse:
     +schema: seeds
     +quote_columns: false
+    ratings:
+      # NOT seeded — the 25M-row COPY OOM-kills the ~6GB Airflow container. The CSV
+      # stays in seeds/ and is streamed by models/bronze/raw_ratings.sql via read_csv.
+      +enabled: false
     movies:
       # MovieLens movies.csv has RFC-4180 escaped quotes (e.g. movieId 7789:
       # "11'09""01 - September 11 (2002)"). DuckDB 1.5.x's fast COPY parser

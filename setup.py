@@ -22,8 +22,12 @@ import requests
 
 
 MOVIELENS_URL = "https://files.grouplens.org/datasets/movielens/ml-25m.zip"
-DATA_DIR = Path("data")
-SEEDS_DIR = Path("seeds")
+# Anchor to the project dir (this file's location), not the cwd — generate_users()
+# is also called from the movielens_data_refresh Airflow task, whose working dir is
+# not the project root, so relative paths raised FileNotFoundError on seeds/users.csv.
+_ROOT = Path(__file__).resolve().parent
+DATA_DIR = _ROOT / "data"
+SEEDS_DIR = _ROOT / "seeds"
 ZIP_PATH = DATA_DIR / "ml-25m.zip"
 EXTRACT_DIR = DATA_DIR / "ml-25m"
 

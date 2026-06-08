@@ -14,6 +14,12 @@ x-airflow-env: &airflow-env
   AIRFLOW_CONN_MOVIELENS_HTTP: 'http://files.grouplens.org'
   AIRFLOW_CONN_SLACK_WEBHOOK: 'http://:DUMMY@hooks.slack.com/services/PLACEHOLDER'
   DUCKDB_PATH: /usr/local/airflow/data/netflix_lakehouse.duckdb
+  # Cap DuckDB memory inside the ~6GB container so streaming loads spill to disk.
+  # The host (profiles.yml default) stays high.
+  DUCKDB_MEMORY_LIMIT: "2GB"
+  # Absolute path to ratings.csv for models/bronze/raw_ratings.sql's read_csv — the
+  # container's dbt cwd isn't guaranteed to be the project dir, so pass it explicitly.
+  RATINGS_CSV_PATH: /usr/local/airflow/dbt/seeds/ratings.csv
   AIRFLOW__CORE__AUTH_MANAGER: airflow.api_fastapi.auth.managers.simple.simple_auth_manager.SimpleAuthManager
   AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: "admin:ADMIN"
   AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "True"
