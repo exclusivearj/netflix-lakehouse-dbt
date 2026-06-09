@@ -8,7 +8,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from cosmos import ExecutionConfig, LoadMode, ProfileConfig, ProjectConfig, RenderConfig
-from cosmos.profiles import DuckDBUserPasswordProfileMapping
 
 
 # The repo root is bind-mounted into the Airflow container at /usr/local/airflow/dbt.
@@ -28,13 +27,16 @@ PROJECT_CONFIG = ProjectConfig(
     manifest_path=DBT_MANIFEST_PATH,
 )
 
+# Use the project's own profiles.yml (bind-mounted, identical to the host) instead of a
+# Cosmos-generated profile. Cosmos's DuckDBUserPasswordProfileMapping emitted a profile
+# that dbt-duckdb 1.10 rejected ("Inconsistency between 'path' and 'database' ... database
+# must be 'memory' to match the path") — it placed the file in `database`, leaving `path`
+# at :memory:. Reusing profiles.yml guarantees host parity (path, memory_limit,
+# preserve_insertion_order) and resolves DUCKDB_PATH / DUCKDB_MEMORY_LIMIT from the env.
 PROFILE_CONFIG = ProfileConfig(
     profile_name="netflix_lakehouse",
     target_name="dev",
-    profile_mapping=DuckDBUserPasswordProfileMapping(
-        conn_id="duckdb_default",
-        profile_args={"database": "/usr/local/airflow/data/netflix_lakehouse.duckdb"},
-    ),
+    profiles_yml_filepath=DBT_PROJECT_DIR / "profiles.yml",
 )
 
 BRONZE_RENDER = RenderConfig(load_method=LoadMode.DBT_MANIFEST, select=["path:models/bronze"])

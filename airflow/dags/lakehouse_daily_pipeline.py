@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from datetime import datetime, timedelta
 
@@ -42,6 +43,11 @@ DBT_BASH = (
     schedule="0 2 * * *",
     catchup=False,
     max_active_runs=1,
+    # DuckDB is single-writer (one process per file). Cosmos runs each dbt model as a
+    # separate `dbt` subprocess and would otherwise execute independent models (e.g. the
+    # 4 bronze tables) in parallel, colliding on the DuckDB file lock. Serialize the DAG
+    # so only one dbt process touches the database at a time.
+    max_active_tasks=1,
     default_args={"retries": 1, "retry_delay": timedelta(minutes=5)},
     tags=["project2", "dbt", "lakehouse"],
     description="Full daily run of the Netflix lakehouse: seed → snapshot → Bronze → Silver → Gold → observe quality checks.",
@@ -52,12 +58,23 @@ def lakehouse_daily_pipeline():
     def check_source_data_freshness() -> dict:
         hook = DuckDBHook()
         counts = {}
-        for seed in ("ratings", "movies", "tags", "users"):
+        # dbt-duckdb prefixes the custom 'seeds' schema with the 'main' target →
+        # main_seeds. On a fresh first run these don't exist until dbt_seed runs
+        # (this is a best-effort pre-flight), so missing → 0.
+        for seed in ("movies", "tags", "users"):
             try:
-                counts[seed] = hook.get_table_row_count("seeds", seed)
+                counts[seed] = hook.get_table_row_count("main_seeds", seed)
             except Exception as e:
                 log.warning("Seed %s not yet loaded (%s); continuing.", seed, e)
                 counts[seed] = 0
+        # ratings is streamed from CSV via read_csv (not a seed table) — count the file.
+        ratings_csv = os.environ.get("RATINGS_CSV_PATH", "seeds/ratings.csv")
+        try:
+            rows = hook.run(f"SELECT COUNT(*) FROM read_csv('{ratings_csv}', header=true)")
+            counts["ratings"] = int(rows[0][0]) if rows else 0
+        except Exception as e:
+            log.warning("ratings CSV not countable (%s); continuing.", e)
+            counts["ratings"] = 0
         log.info("Seed row counts: %s", counts)
         return counts
 
@@ -98,9 +115,11 @@ def lakehouse_daily_pipeline():
     @task
     def run_observe_quality_checks() -> dict:
         hook = DuckDBHook()
-        if not hook.table_exists("gold", "mart_content_performance"):
+        # Gold models land in main_gold (dbt-duckdb prefixes the custom 'gold' schema
+        # with the 'main' target), NOT a bare 'gold' schema.
+        if not hook.table_exists("main_gold", "mart_content_performance"):
             raise AirflowSkipException("mart_content_performance not built; skipping checks.")
-        df = hook.get_pandas_df("SELECT * FROM gold.mart_content_performance")
+        df = hook.get_pandas_df("SELECT * FROM main_gold.mart_content_performance")
 
         results: list[dict] = []
         any_fail = False
@@ -121,6 +140,10 @@ def lakehouse_daily_pipeline():
 
     @task(trigger_rule=TriggerRule.ALL_DONE)
     def store_run_metadata(seed_counts: dict, observe_result: dict) -> None:
+        # ALL_DONE means this runs even if an upstream task was skipped/failed, in which
+        # case its XCom arrives as None — guard so .get() doesn't blow up.
+        seed_counts = seed_counts or {}
+        observe_result = observe_result or {}
         hook = DuckDBHook()
         conn = hook.get_conn()
         try:
