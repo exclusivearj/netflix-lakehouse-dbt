@@ -26,10 +26,10 @@ Model the viewership and content domain for a Netflix-like streaming platform so
 ## Architecture
 
 ```
-seeds/ (ratings, movies, tags, users)
+seeds/ (movies, tags, users)  +  ratings.csv (streamed via read_csv, not seeded*)
         │
         ▼
-Bronze: raw_ratings, raw_movies, raw_tags, raw_users        (views, +_loaded_at)
+Bronze: raw_ratings (read_csv), raw_movies, raw_tags, raw_users   (views, +_loaded_at)
         │
         ▼
 Silver: stg_ratings, stg_movies, stg_tags, stg_users         (cleaned + typed)
@@ -46,6 +46,12 @@ Gold:
                              │       ▼
                              └─▶  mart_content_performance (Bayesian score)
 ```
+
+> *The 25M-row `ratings` is **not** a dbt seed. `dbt seed` loads it via a single
+> in-transaction `COPY` that DuckDB buffers entirely in memory (~11 GB) and gets
+> OOM-killed in the Airflow container. `models/bronze/raw_ratings.sql` instead
+> streams `seeds/ratings.csv` with `read_csv(...)` (memory-bounded, <2 GB);
+> `dbt_project.yml` sets `ratings: +enabled: false`. movies/tags/users stay seeds.
 
 ## Source data profile
 
@@ -95,6 +101,23 @@ Builds the `p2-airflow` image, then brings up postgres + airflow-init + webserve
 | `dbt_docs_publish` | manual / on-success | `dbt docs generate` → copy to `/www/dbt_docs` → Slack notification |
 
 The Cosmos `DbtTaskGroup` pattern creates **one Airflow task per dbt model** — granular retry without re-running the whole layer. Visible in Graph view.
+
+### Airflow operational notes (DuckDB + Cosmos)
+
+Wiring a single-file DuckDB into Cosmos + Airflow needs a few non-obvious settings (all in `airflow/include/dbt_project_config.py` and the DAG):
+
+- **Parse from the manifest, not `dbt ls`.** Cosmos defaults to running `dbt ls` at DAG-parse time (once per `DbtTaskGroup`), which blows past the 30 s `dagbag_import_timeout`. We set `LoadMode.DBT_MANIFEST` + `ProjectConfig(manifest_path=target/manifest.json)`. **The manifest must exist before the scheduler parses** — generate it with `make all` / `dbt parse` on the host (it's bind-mounted into the container).
+- **Reuse the project `profiles.yml`.** `ProfileConfig(profiles_yml_filepath=…/profiles.yml)`, not a generated profile — Cosmos's `DuckDBUserPasswordProfileMapping` produced a profile dbt-duckdb 1.10 rejects (`'database' must be 'memory' to match 'path'`).
+- **Serialize the DAG: `max_active_tasks=1`.** DuckDB is single-writer; Cosmos runs each model as its own `dbt` process, so parallel tasks collide on the file lock.
+- **Schema names are `main_<layer>`.** dbt-duckdb prefixes the custom schema with the `main` target, so the DuckDBHook/SQL use `main_gold`, `main_seeds` (not `gold`/`seeds`). The snapshot's `target_schema: gold` lands in a bare `gold` schema (asymmetry).
+- **Memory & paths via env** (`docker-compose.yml`): `DUCKDB_MEMORY_LIMIT=2GB`, `RATINGS_CSV_PATH=/usr/local/airflow/dbt/seeds/ratings.csv`.
+
+> **Heads-up — host vs Airflow share one DuckDB file**, and DuckDB allows a single
+> writer. Don't run host `make build`/`make all` and the Airflow pipeline at the same
+> time. Likewise, this project's Airflow stack and project 4's full stack together
+> exceed a 5.8 GB Docker VM (Kafka/seed tasks OOM, exit 137) — **run one stack at a
+> time, or raise Docker Desktop memory.** If an Airflow task OOMs, check `docker ps`
+> for the other project's stack before debugging code.
 
 ## Design & modeling decisions
 
